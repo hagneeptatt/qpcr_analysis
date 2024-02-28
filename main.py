@@ -1,5 +1,5 @@
-# Install required libraries (modules and packages)
-pip install
+# Install libraries
+pip install pandas
 
 # modules are single python files
 # package is a directory that contains one or more modules
@@ -29,9 +29,11 @@ excel_files = glob.glob(path + "/*.xls")
 dictionary = {}
 
 # Loop through each Excel file and read it into a DataFrame
-for filename in excel_files:
-    df = pd.read_excel(filename, index_col=0, header=7)
+for file in excel_files:
+    # extract filename without extension
+    filename = file.split('/')[-1].split('.')[0]
+    # read excel file into dataframe, for qPCR data - header start at row 8
+    # no index collumn so indexing is down by row number
+    df = pd.read_excel(file, index_col=none, header=7)
     dictionary[filename] = df
 
-print(df)
-print(filename)
