@@ -119,7 +119,7 @@ for file in excel_files:
                 # drop corresponding row from group
                 group_value.drop(group_value.index[max_diff_index[0]])
 
-
+blah
 
         print(max_diff_index)
         print(group_value)
