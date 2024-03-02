@@ -14,11 +14,9 @@ import os
 import numpy as np
 
 
-
 # Define path of excel files
 # Use of r'' allows string to be interpreted as raw string
 #  Thus \ is not interpreted as a special character
-
 path = r'C:\Users\mbgm4fs3\OneDrive - The University of Manchester\PhD\Experimental\Data\Mechanical Stimulation\Main study\Y201\qPCR'
 
 
@@ -52,13 +50,8 @@ for file in excel_files:
     # indexing multiple collumns required double square brackets
     df = df[['Sample Name', 'Target Name', 'Cт']]
 
-    # # Create new datafram taking all rows without NaN value in Sample Name and Ct
-    # df = df[df['Sample Name'].notna()]
-    # df = df[df['Cт'].notna()]
-
     # drops rows with NaN
     df = df.dropna()
-
 
     # Create new dataframe taking all rows without 'undetermined' string
     # in Ct collumn using boolean indexing
@@ -72,6 +65,9 @@ for file in excel_files:
     # Apply mask to filter out rows containing string
     df = df[mask]
 
+    # convert ct collumn to numerical values so we can perform aggregate and statistical operations later
+    df['Cт'] = pd.to_numeric(df['Cт'])
+
     # Create new dataframe which groups data by sample name and target gene name
     # use agg() function to perform aggregate operations to data e.g. mean, std, sum, count etc.
     grouped_df = df.groupby(['Sample Name', 'Target Name'])
@@ -80,16 +76,7 @@ for file in excel_files:
     # first calculate Q1 and Q3 of grouped data using quantile function from numpy package
     # the quantile is worked out based on rank order of values e.g. 0.5 quantile = median
     # pandas automatically applies any function, i.e. quantile(), to each group seperately within a grouped dataframe
-    # This behaviour is inherent to 'groupby()' functionality in pandas
-
-    # Check data types in the grouped dataset
-    print(grouped_df['Cт'].dtype)
-    print(grouped_df['Cт'].unique())
-
-
-    print(grouped_df['Cт'].dtype)
-    print(grouped_df['Cт'].unique())
-
+    # This behaviour is inherent to 'groupby()' functionality in panda
 
     Q1 = grouped_df['Cт'].quantile(0.25)
     Q3 = grouped_df['Cт'].quantile(0.75)
@@ -109,56 +96,32 @@ for file in excel_files:
     # this codes only keeps data which is between lower and upper bound, filtering out other data with a boolean mask
     # x.name represents the name of each group i.e. a tuple containing 'Sample Name' and'Target Name'
     # Using x.name allows you to calculate the lower and upper bounds specific to each group, ensuring that outliers are determined based on the quartiles and IQR of each individual group's 'Cт' values.
-    filtered_groups = grouped_df.apply(lambda x: x[(x['Cт'] >= lower_bound[x.name]) & (x['Cт'] <= upper_bound[x.name])])
+    filtered_groups = grouped_df.apply(lambda x: x[(x['Cт'] >= lower_bound[x.name]) & (x['Cт'] <= upper_bound[x.name])], include_groups=False)
 
-    # Calculate mean and S.D. of remaining data
-    mean_values = filtered_groups.groupby(['Sample Name', 'Target Name'])['Cт'].agg(['mean'], 'std')
-
-
-
-
-    df_dictionary[filename] = mean_values
-
-
-print(df)
-
-
-
-
-
-
-
-
-
-
-
-
+    # Iterate through each group in the DataFrame
+    # need to groupby() again as we have applied a function to the previously grouped object, thus resulting in
+    # a combined data frame (split-apply-combine)
+    for group_key, group_value in filtered_groups.groupby(['Sample Name', 'Target Name']):
+        # state CT variable from the group_value index
+        CT = group_value['Cт']
+        # if loop, whne the number of CT values within the group is 3, we perform some vector operations to calculate the absolute differences between all combinations of CT value within that group
+        # this is done by subtracting a 1D row vectors containing the CT values from a 2D collumn vector containing the same CT values (transpose of 1D row vector)
+        # This produces a 2D matrix containing all the possible absolute differences between CT combinations
+        if len(group_value) == 3:
+            # calculate differences between CT values
+            diffs = abs(group_value.values[:,None] - group_value.values)
+            # find the maximum differences
+            max_diff = np.max(diffs)
+            # check is max difference exceeds threshold of 1
+            if max_diff > 1:
+                # find index of the samples with the max difference
+                max_diff_index = np.unravel_index(np.argmax(diffs), diffs.shape)
+                # drop corresponding row from group
+                group_value.drop(group_value.index[max_diff_index[0]])
 
 
-#
-# # Group dictionary of files based of biological replicates i.e. same filename apart from number after '_n'
-#
-# #Initialise empty dictionary
-# grouped_df_dictionary = {}
-#
-# # Loop through each filename (key) in the dictionary and the corresponding dataframe (value)
-# # .items() function returns tuple (immutable list) containing key-value pair
-# # the first element in the list is the key i.e. filename, followed by values i.e. dataframe (df)
-# for filename, df in df_dictionary.items():
-#     # Extract the common part of the filename before '_n'
-#     filename_base = filename.split('_n')[0]
-#
-#     # Check if the sample name base already exists in the grouped filenames
-#     if filename_base in grouped_df_dictionary:
-#         # If the sample name base exists as a key, append the current filename's dataframe to it
-#         grouped_df_dictionary[filename_base].append(df)
-#     else:
-#         # If the sample name base doesn't exist as a key, create a new entry with the current filenames dataframe
-#         grouped_df_dictionary[filename_base] = [df]
-#
-# # Now grouped_filenames contains lists of filenames grouped by the common part before '_n'
 
-
-# print(grouped_df_dictionary)
-
-
+        print(max_diff_index)
+        print(group_value)
+        print('BREAKKKKKK')
+    df_dictionary[filename] = filtered_groups
