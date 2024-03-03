@@ -31,8 +31,9 @@ excel_files = glob.glob(path + "/*.xls")
 # list assignms numerical index to values
 df_dictionary = {}
 
-# Loop through each Excel file and read it into a DataFrame
+# Loop through each Excel file and read it into a dataframe
 # 'file' is just a placeholder for each item in the iterable list i.e. excel_files list
+# this for loop reads the data in a cleans it
 for file in excel_files:
     # extract filename without extension
     # splits path string by first '.' instring [0] and first '\' from the end [-1]
@@ -101,27 +102,47 @@ for file in excel_files:
     # Iterate through each group in the DataFrame
     # need to groupby() again as we have applied a function to the previously grouped object, thus resulting in
     # a combined data frame (split-apply-combine)
-    for group_key, group_value in filtered_groups.groupby(['Sample Name', 'Target Name']):
-        # state CT variable from the group_value index
-        CT = group_value['Cт']
-        # if loop, whne the number of CT values within the group is 3, we perform some vector operations to calculate the absolute differences between all combinations of CT value within that group
-        # this is done by subtracting a 1D row vectors containing the CT values from a 2D collumn vector containing the same CT values (transpose of 1D row vector)
-        # This produces a 2D matrix containing all the possible absolute differences between CT combinations
-        if len(group_value) == 3:
-            # calculate differences between CT values
-            diffs = abs(group_value.values[:,None] - group_value.values)
-            # find the maximum differences
-            max_diff = np.max(diffs)
-            # check is max difference exceeds threshold of 1
-            if max_diff > 1:
-                # find index of the samples with the max difference
-                max_diff_index = np.unravel_index(np.argmax(diffs), diffs.shape)
-                # drop corresponding row from group
-                group_value.drop(group_value.index[max_diff_index[0]])
+    for group_key, group in filtered_groups.groupby(['Sample Name', 'Target Name']):
+        # print(sample_name)
+        # print(target_name)
+        # print(group)
+        # Get the number of samples within the group
+        num_value = len(group)
 
-blah
+        # state threshold value
+        threshold = 1
 
-        print(max_diff_index)
-        print(group_value)
-        print('BREAKKKKKK')
+        # If only one CT value is present, remove it
+        # .loc() allows us ot access a group of rows and collumns by the labels being looped
+        if num_value == 1:
+            filtered_groups.loc[group_key] = None
+        elif num_value == 2:
+            # If 2 CT values are present, check that the absolute difference between them is less than threshold apart
+            diff = np.abs(group['Cт'].values[0] - group['Cт'].values[1])
+           # if the differece is above threshold, remove both CT value
+            if diff > threshold:
+                filtered_groups.loc[group_key] = None
+        else:
+            # for 3 CT values, work out the median and remove CT value than are greater than threshold away from median
+            median_ct = np.median(group['Cт'].values)
+            diff = np.abs(group['Cт'].values - median_ct)
+            # check if any of the calculates diffrences beween ct and median are above threshold and remove CT values that are above threshold
+            if np.any(diff > threshold):
+                group = group[diff <= threshold]
+            # if all CT values are more than threshold apart from median, remove them all
+            elif np.all(diff > threshold):
+                filtered_groups.loc[group_key] = None
+
+            # update original dataframe with the modified group
+            filtered_groups.loc[group_key] = group
+
+    # drop NaN values from filtered groups
+    filtered_groups = filtered_groups.dropna()
+    # Add filtered data to dictionary the filename as the key
     df_dictionary[filename] = filtered_groups
+
+
+print(df_dictionary)
+
+
+
