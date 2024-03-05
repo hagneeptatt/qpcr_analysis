@@ -22,9 +22,9 @@ path = r'C:\Users\mbgm4fs3\OneDrive - The University of Manchester\PhD\Experimen
 
 # Import all excel files in directory into pandas using glob
 # glob creates a list containing all excel file names
-# create empty list li and use for loop to append excel files to list
 
 excel_files = glob.glob(path + "/*.xls")
+
 
 # Initialise empty list to store all data frames
 # dictionary assigns keys to values e.g. filename, rather than indices (numbers) to values
@@ -45,11 +45,14 @@ for file in excel_files:
     # no index collumn so indexing is down by row number
     df = pd.read_excel(file, header=7)
 
+    # Lete rename the CT collumn header as it uses strange syntax for CT, requiring us to copy and paste. Therefore lets change it to CT.
+    # inplace = True means the dataframe is renamed in place rather than returning a copy when inplace = False, which is the default. if we used the latter we would require df = df.rename() to replace our dataframe with the new copy
+    df.rename(columns = {'Cт':'CT'}, inplace = True)
 
     # create new dataframe with only desirable collumn data
     # want sample name, gene target name and CT value
     # indexing multiple collumns required double square brackets
-    df = df[['Sample Name', 'Target Name', 'Cт']]
+    df = df[['Sample Name', 'Target Name', 'CT']]
 
     # drops rows with NaN
     df = df.dropna()
@@ -62,15 +65,16 @@ for file in excel_files:
     #
     # Boolean data type = a form of data with only two possible values e.g. True or False
     # Create boolean mask
-    mask = df['Cт'] != 'Undetermined'
+    mask = df['CT'] != 'Undetermined'
     # Apply mask to filter out rows containing string
     df = df[mask]
 
     # convert ct collumn to numerical values so we can perform aggregate and statistical operations later
-    df['Cт'] = pd.to_numeric(df['Cт'])
+    df['CT'] = pd.to_numeric(df['CT'])
 
     # Create new dataframe which groups data by sample name and target gene name
     # use agg() function to perform aggregate operations to data e.g. mean, std, sum, count etc.
+    # Grouping by several collumns results in a dataframe with multi-index (aka hierachihcal index)
     grouped_df = df.groupby(['Sample Name', 'Target Name'])
 
     # Detect outliers using 1.5 x IQR rule
@@ -79,8 +83,8 @@ for file in excel_files:
     # pandas automatically applies any function, i.e. quantile(), to each group seperately within a grouped dataframe
     # This behaviour is inherent to 'groupby()' functionality in panda
 
-    Q1 = grouped_df['Cт'].quantile(0.25)
-    Q3 = grouped_df['Cт'].quantile(0.75)
+    Q1 = grouped_df['CT'].quantile(0.25)
+    Q3 = grouped_df['CT'].quantile(0.75)
     IQR = Q3 - Q1
 
     # Define upper and lower bound for outlier detection using 1.5 X IQR rule
@@ -96,16 +100,14 @@ for file in excel_files:
     # x['Ct'] indexes the Ct collumn from the grouped dataframe
     # this codes only keeps data which is between lower and upper bound, filtering out other data with a boolean mask
     # x.name represents the name of each group i.e. a tuple containing 'Sample Name' and'Target Name'
-    # Using x.name allows you to calculate the lower and upper bounds specific to each group, ensuring that outliers are determined based on the quartiles and IQR of each individual group's 'Cт' values.
-    filtered_groups = grouped_df.apply(lambda x: x[(x['Cт'] >= lower_bound[x.name]) & (x['Cт'] <= upper_bound[x.name])], include_groups=False)
+    # Using x.name allows you to calculate the lower and upper bounds specific to each group, ensuring that outliers are determined based on the quartiles and IQR of each individual group's 'CT' values.
+    filtered_groups = grouped_df.apply(lambda x: x[(x['CT'] >= lower_bound[x.name]) & (x['CT'] <= upper_bound[x.name])], include_groups=False)
 
     # Iterate through each group in the DataFrame
     # need to groupby() again as we have applied a function to the previously grouped object, thus resulting in
     # a combined data frame (split-apply-combine)
     for group_key, group in filtered_groups.groupby(['Sample Name', 'Target Name']):
-        # print(sample_name)
-        # print(target_name)
-        # print(group)
+
         # Get the number of samples within the group
         num_value = len(group)
 
@@ -118,14 +120,14 @@ for file in excel_files:
             filtered_groups.loc[group_key] = None
         elif num_value == 2:
             # If 2 CT values are present, check that the absolute difference between them is less than threshold apart
-            diff = np.abs(group['Cт'].values[0] - group['Cт'].values[1])
+            diff = np.abs(group['CT'].values[0] - group['CT'].values[1])
            # if the differece is above threshold, remove both CT value
             if diff > threshold:
                 filtered_groups.loc[group_key] = None
         else:
             # for 3 CT values, work out the median and remove CT value than are greater than threshold away from median
-            median_ct = np.median(group['Cт'].values)
-            diff = np.abs(group['Cт'].values - median_ct)
+            median_ct = np.median(group['CT'].values)
+            diff = np.abs(group['CT'].values - median_ct)
             # check if any of the calculates diffrences beween ct and median are above threshold and remove CT values that are above threshold
             if np.any(diff > threshold):
                 group = group[diff <= threshold]
@@ -138,11 +140,111 @@ for file in excel_files:
 
     # drop NaN values from filtered groups
     filtered_groups = filtered_groups.dropna()
+
+
+    ## This section of the for loop calculates 2^-dCT for each datafram
+
+    # first we calculate the mean CT values for each sample and target gene by grouping the data and using mean function
+    CT_mean = filtered_groups.groupby(['Sample Name', 'Target Name'])['CT'].mean()
+
+    # We can now reset the index of the dataframe so that the levels 'Sample Name' 'Target Nmae' now become collumn headers again. As our CT collumn now only contains one value, this makes it easier to index out data when calculating dCT and ddCT
+    CT_mean = CT_mean.reset_index()
+
+    # Heres where you can input the string for your housekeeping gene i.e. GAPDH
+    housekeeping_name = 'GAPDH'
+
+    # Create new independent dataframes for houskeeping gene and target genes
+    control_CT_mean = CT_mean[CT_mean['Target Name'] == housekeeping_name]
+    target_CT_mean = CT_mean[CT_mean['Target Name'] != housekeeping_name]
+
+    # Merge the housekeeping and target dataframes based on the key 'Sample Name' i.e. d1, d7, d21_con, d21_exp on = ['Sample Name'] specifies collumn to merge on, thus rows with same sample name we be merged together. suffixes=() is optional, but ensures that we add suffixes to identify collumns which have the same name in the independent dataframes i.e 'CT' and 'Name'
+    merged_df = pd.merge(target_CT_mean, control_CT_mean, on = ['Sample Name'], suffixes = ('', housekeeping_name))
+
+    merged_df['dCT'] = merged_df['CT'] - merged_df['CT' + housekeeping_name]
+
+    # export the merged df to csv
+    merged_df.to_csv(filename + '.csv')
+
     # Add filtered data to dictionary the filename as the key
-    df_dictionary[filename] = filtered_groups
+    df_dictionary[filename] = merged_df
 
 
-print(df_dictionary)
+# print(merged_df[['CT_target', 'CT_gapdh', 'dCT']])
+#print(df_dictionary)
+
+## We now want to calculate 2^-ddCT for each dataframe in our new dictionary as we must select which dataframes contain our control/untreated sample data i.e. d1 alginate free swelling controls
+# First, lets extract our control data by looping through our dictionary
+# State suitable substring identifier within filename of control, and the corresponding control sample names
+control_filename = 'alginate'
+control_sample_name = 'd1'
+
+sample1_filename = '400um'
+
+sample2_filename = '800um'
+
+# Create empy dataframe to containg control data
+control_dictionary = {}
+
+# Create empty dictionary for sample data
+sample1_dictionary = {}
+sample2_dictionary = {}
+
+
+# for loop extracts out control data and sample data to new dictionaries
+for filename in df_dictionary.keys():
+    if control_filename in filename:
+
+        # first lets extract entire control data
+        control_data = df_dictionary[filename]
+
+        # Now lets extract the the control timepoint data that we will use for ddCT calculation i.e Alginate d1 control
+        # here we use boolean indexing to select subset of data within dataframe within dictionary, so all rows that contain the control sample name are indexed
+        control_data_d1 = df_dictionary[filename][df_dictionary[filename]['Sample Name'] == control_sample_name]
+        control_dictionary[filename + 'd1'] = control_data_d1
+
+        # now extract sample1 and sample2 data into independent dictionaries
+    elif sample1_filename in filename:
+        sample1_data = df_dictionary[filename]
+        sample1_dictionary[filename] = sample1_data
+    elif sample2_filename in filename:
+        sample2_data = df_dictionary[filename]
+        sample2_dictionary[filename] = sample1_data
+
+
+
+# Now need another loop through our dictionaries to extract relevant biological replicate pairs i.e. same number after '_n' in the filename
+# can iterate through keys of dictionary using for loop
+# we can iterate through both keys and items within a dictionary by using the .items() method. This method returns a view object (object that changes with parent dictionary) containing the items within a dictionary as key-value tuples (same as list but immutable/can't change the items within it).
+# if you have only one vairbale in the for loop it produces a tuple containing ('filename', dataframe
+# if you have two variable in for loop such as in our code, you can unpack the filenames and dictionarieas into seperate variables, one for key and one for values
+# we will also use the zip() function to loop through
+
+# setup empty dictionary for final data
+
+final_data = {}
+
+# Iterate over each pair of dataframes from the sample and control dictionaries
+for (sample1_key, sample1_data), (sample2_key, sample2_data), (control_key, control_data_d1) in zip(sample1_dictionary.items(), sample2_dictionary.items(), control_dictionary.items()):
+
+    # merge sample dataframes with control dataframe. The merge is done on the names within 'Target Name' to ensure each target gene row is merged
+    sample1_merged = pd.merge(sample1_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample1_filename, '_' + control_filename + '_' + control_sample_name))
+    sample2_merged = pd.merge(sample2_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample2_filename, '_' + control_filename + '_' + control_sample_name))
+
+    # Calculate ddCT by subtracting control dCT collumn by sample dCt collumn
+    sample1_merged['ddCT'] = sample1_merged['dCT' + '_' + sample1_filename] - sample1_merged['dCT' + '_' + control_filename + '_' + control_sample_name]
+
+    # Calculate ddCT by subtracting control dCT collumn by sample dCt collumn
+    sample2_merged['ddCT'] = sample2_merged['dCT' + '_' + sample2_filename] - sample2_merged['dCT' + '_' + control_filename + '_' + control_sample_name]
+
+    print(sample1_merged)
+    print(sample2_merged)
+
+# print(sample1_dictionary)
+# print(sample2_dictionary)
+#print(control_dictionary)
+
+
+
 
 
 
