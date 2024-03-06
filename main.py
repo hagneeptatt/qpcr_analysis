@@ -150,6 +150,7 @@ for file in excel_files:
     # We can now reset the index of the dataframe so that the levels 'Sample Name' 'Target Nmae' now become collumn headers again. As our CT collumn now only contains one value, this makes it easier to index out data when calculating dCT and ddCT
     CT_mean = CT_mean.reset_index()
 
+
     # Heres where you can input the string for your housekeeping gene i.e. GAPDH
     housekeeping_name = 'GAPDH'
 
@@ -157,10 +158,11 @@ for file in excel_files:
     control_CT_mean = CT_mean[CT_mean['Target Name'] == housekeeping_name]
     target_CT_mean = CT_mean[CT_mean['Target Name'] != housekeeping_name]
 
-    # Merge the housekeeping and target dataframes based on the key 'Sample Name' i.e. d1, d7, d21_con, d21_exp on = ['Sample Name'] specifies collumn to merge on, thus rows with same sample name we be merged together. suffixes=() is optional, but ensures that we add suffixes to identify collumns which have the same name in the independent dataframes i.e 'CT' and 'Name'
-    merged_df = pd.merge(target_CT_mean, control_CT_mean, on = ['Sample Name'], suffixes = ('', housekeeping_name))
 
-    merged_df['dCT'] = merged_df['CT'] - merged_df['CT' + housekeeping_name]
+    # Merge the housekeeping and target dataframes based on the key 'Sample Name' i.e. d1, d7, d21_con, d21_exp on = ['Sample Name'] specifies collumn to merge on, thus rows with same sample name we be merged together. suffixes=() is optional, but ensures that we add suffixes to identify collumns which have the same name in the independent dataframes i.e 'CT' and 'Name'
+    merged_df = pd.merge(target_CT_mean, control_CT_mean, on = ['Sample Name'], suffixes = ('', '_' + housekeeping_name))
+
+    merged_df['dCT'] = merged_df['CT'] - merged_df['CT' + '_' + housekeeping_name]
 
     # export the merged df to csv
     merged_df.to_csv(filename + '.csv')
@@ -168,9 +170,6 @@ for file in excel_files:
     # Add filtered data to dictionary the filename as the key
     df_dictionary[filename] = merged_df
 
-
-# print(merged_df[['CT_target', 'CT_gapdh', 'dCT']])
-#print(df_dictionary)
 
 ## We now want to calculate 2^-ddCT for each dataframe in our new dictionary as we must select which dataframes contain our control/untreated sample data i.e. d1 alginate free swelling controls
 # First, lets extract our control data by looping through our dictionary
@@ -183,6 +182,7 @@ sample1_filename = '400um'
 sample2_filename = '800um'
 
 # Create empy dataframe to containg control data
+control_dictionary_d1 = {}
 control_dictionary = {}
 
 # Create empty dictionary for sample data
@@ -200,7 +200,8 @@ for filename in df_dictionary.keys():
         # Now lets extract the the control timepoint data that we will use for ddCT calculation i.e Alginate d1 control
         # here we use boolean indexing to select subset of data within dataframe within dictionary, so all rows that contain the control sample name are indexed
         control_data_d1 = df_dictionary[filename][df_dictionary[filename]['Sample Name'] == control_sample_name]
-        control_dictionary[filename + 'd1'] = control_data_d1
+        control_dictionary_d1[filename + 'd1'] = control_data_d1
+        control_dictionary[filename] = control_data
 
         # now extract sample1 and sample2 data into independent dictionaries
     elif sample1_filename in filename:
@@ -208,8 +209,7 @@ for filename in df_dictionary.keys():
         sample1_dictionary[filename] = sample1_data
     elif sample2_filename in filename:
         sample2_data = df_dictionary[filename]
-        sample2_dictionary[filename] = sample1_data
-
+        sample2_dictionary[filename] = sample2_data
 
 
 # Now need another loop through our dictionaries to extract relevant biological replicate pairs i.e. same number after '_n' in the filename
@@ -224,24 +224,30 @@ for filename in df_dictionary.keys():
 final_data = {}
 
 # Iterate over each pair of dataframes from the sample and control dictionaries
-for (sample1_key, sample1_data), (sample2_key, sample2_data), (control_key, control_data_d1) in zip(sample1_dictionary.items(), sample2_dictionary.items(), control_dictionary.items()):
+for (sample1_key, sample1_data), (sample2_key, sample2_data), (control_key, control_data), (control_key_d1, control_data_d1) in zip(sample1_dictionary.items(), sample2_dictionary.items(),control_dictionary.items(), control_dictionary_d1.items()):
 
     # merge sample dataframes with control dataframe. The merge is done on the names within 'Target Name' to ensure each target gene row is merged
+    control_merged = pd.merge(control_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + control_filename, '_' + control_filename + '_' + control_sample_name))
     sample1_merged = pd.merge(sample1_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample1_filename, '_' + control_filename + '_' + control_sample_name))
     sample2_merged = pd.merge(sample2_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample2_filename, '_' + control_filename + '_' + control_sample_name))
 
     # Calculate ddCT by subtracting control dCT collumn by sample dCt collumn
+    control_merged['ddCT'] = control_merged['dCT' + '_' + control_filename] - control_merged['dCT' + '_' + control_filename + '_' + control_sample_name]
     sample1_merged['ddCT'] = sample1_merged['dCT' + '_' + sample1_filename] - sample1_merged['dCT' + '_' + control_filename + '_' + control_sample_name]
-
-    # Calculate ddCT by subtracting control dCT collumn by sample dCt collumn
     sample2_merged['ddCT'] = sample2_merged['dCT' + '_' + sample2_filename] - sample2_merged['dCT' + '_' + control_filename + '_' + control_sample_name]
 
-    print(sample1_merged)
-    print(sample2_merged)
+    # Calculate 2^-ddCT
+    control_merged['2^-ddCT'] = 2**(-control_merged['ddCT'])
+    sample1_merged['2^-ddCT'] = 2**(-sample1_merged['ddCT'])
+    sample2_merged['2^-ddCT'] = 2**(-sample2_merged['ddCT'])
 
-# print(sample1_dictionary)
-# print(sample2_dictionary)
-#print(control_dictionary)
+    # convert final merged data sets to CSV
+    control_merged.to_csv(control_key + '_results.csv')
+    sample1_merged.to_csv(sample1_key + '_results.csv')
+    sample2_merged.to_csv(sample2_key + '_results.csv')
+
+
+
 
 
 
