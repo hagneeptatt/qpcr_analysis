@@ -227,9 +227,10 @@ final_data = {}
 for (sample1_key, sample1_data), (sample2_key, sample2_data), (control_key, control_data), (control_key_d1, control_data_d1) in zip(sample1_dictionary.items(), sample2_dictionary.items(),control_dictionary.items(), control_dictionary_d1.items()):
 
     # merge sample dataframes with control dataframe. The merge is done on the names within 'Target Name' to ensure each target gene row is merged
-    control_merged = pd.merge(control_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + control_filename, '_' + control_filename + '_' + control_sample_name))
-    sample1_merged = pd.merge(sample1_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample1_filename, '_' + control_filename + '_' + control_sample_name))
-    sample2_merged = pd.merge(sample2_data[['Sample Name', 'Target Name', 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'dCT']], on = ['Target Name'], suffixes = ('_' + sample2_filename, '_' + control_filename + '_' + control_sample_name))
+    control_merged = pd.merge(control_data[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], on = ['Target Name'], suffixes = ('_' + control_filename, '_' + control_filename + '_' + control_sample_name))
+    sample1_merged = pd.merge(sample1_data[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], on = ['Target Name'], suffixes = ('_' + sample1_filename, '_' + control_filename + '_' + control_sample_name))
+    sample2_merged = pd.merge(sample2_data[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], control_data_d1[['Sample Name', 'Target Name', 'CT','CT' + '_' + housekeeping_name, 'dCT']], on = ['Target Name'], suffixes = ('_' + sample2_filename, '_' + control_filename + '_' + control_sample_name))
+
 
     # Calculate ddCT by subtracting control dCT collumn by sample dCt collumn
     control_merged['ddCT'] = control_merged['dCT' + '_' + control_filename] - control_merged['dCT' + '_' + control_filename + '_' + control_sample_name]

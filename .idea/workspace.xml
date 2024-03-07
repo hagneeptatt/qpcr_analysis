@@ -4,7 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9612eb7b-4f17-48aa-8838-28436a494848" name="Changes" comment="Calculating ddCT finished">
+    <list default="true" id="9612eb7b-4f17-48aa-8838-28436a494848" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -146,7 +146,14 @@
       <option name="project" value="LOCAL" />
       <updated>1709663020306</updated>
     </task>
-    <option name="localTasksCounter" value="9" />
+    <task id="LOCAL-00009" summary="save before changing code to include all data in exported excel files">
+      <created>1709749114869</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1709749114869</updated>
+    </task>
+    <option name="localTasksCounter" value="10" />
     <servers />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
@@ -165,6 +172,7 @@
     <MESSAGE value="First attempt at removing outliers" />
     <MESSAGE value="Test" />
     <MESSAGE value="Data cleaning loops finished" />
-    <option name="LAST_COMMIT_MESSAGE" value="Data cleaning loops finished" />
+    <MESSAGE value="save before changing code to include all data in exported excel files" />
+    <option name="LAST_COMMIT_MESSAGE" value="save before changing code to include all data in exported excel files" />
   </component>
 </project>
